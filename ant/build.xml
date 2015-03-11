@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+
+<project default="init" basedir=".">
+	<description>
+		Builds and deploys .war files to server
+	</description>
+
+	<!-- ################################################## PROPERTIES ########################################################## -->
+	<property name="maven.project.path" value="path/to/your/maven-project" />
+	<property name="war.file.name" value="MyWebApp.war" />
+	<property name="war.file.path" location="path/to/your/maven-project/target/${war.file.name}" />
+	<property name="remote.host" value="some-server.com" />
+	<property name="remote.tomcat.webapps.dir" value="tomcat/webapps" />
+	<tstamp>
+		<format property="TODAY" pattern="yyyy-MM-dd-hh-mm" locale="en" />
+	</tstamp>
+	<property name="maven.home" value="path/to/your/apache-maven-3.2.5" />
+
+	<!-- ################################################## SCP & SSHEXEC ########################################################## -->
+	<!-- Load the jsch lib -->	
+	<available property="ant-jsch.present" file="${ant.home}/lib/ant-jsch.jar" />
+	<fail if="ant-jsch.present" message="Please remove ant-jsch.jar from ANT_HOME/lib." />
+
+	<get dest="../lib/jsch.jar" src="https://repo1.maven.org/maven2/com/jcraft/jsch/0.1.50/jsch-0.1.50.jar" />
+	<get dest="../lib/ant-jsch.jar" src="http://central.maven.org/maven2/org/apache/ant/ant-jsch/1.8.4/ant-jsch-1.8.4.jar" />
+
+	<path id="jsch.class.path">
+		<pathelement location="../lib/ant-jsch.jar" />
+		<pathelement location="../lib/jsch.jar" />
+	</path>
+
+	<taskdef name="scp" classname="org.apache.tools.ant.taskdefs.optional.ssh.Scp" classpathref="jsch.class.path" />
+	<taskdef name="sshexec" classname="org.apache.tools.ant.taskdefs.optional.ssh.SSHExec" classpathref="jsch.class.path" />
+	
+	<!-- ################################################## MAVEN ########################################################## -->
+	<!-- http://maven.apache.org/ant-tasks/examples/mvn.html -->
+	<macrodef name="maven">
+		<attribute name="options" default="" />
+		<attribute name="goal" />
+		<attribute name="basedir" />
+		<attribute name="resultproperty" default="maven.result" />
+		<element name="args" implicit="true" optional="true" />
+		<sequential>
+			<java classname="org.codehaus.classworlds.Launcher" fork="true" dir="@{basedir}" resultproperty="@{resultproperty}">
+				<jvmarg value="-Xmx512m" />
+				<classpath>
+					<fileset dir="${maven.home}/boot">
+						<include name="*.jar" />
+					</fileset>
+					<fileset dir="${maven.home}/lib">
+						<include name="*.jar" />
+					</fileset>
+				</classpath>
+				<sysproperty key="classworlds.conf" value="${maven.home}/bin/m2.conf" />
+				<sysproperty key="maven.home" value="${maven.home}" />
+				<arg line="--batch-mode @{options} @{goal}" />
+			</java>
+		</sequential>
+	</macrodef>
+
+	<!-- ################################################## TARGETS ########################################################## -->
+	<!-- Ask for user credentials -->
+	<target name="credentials">
+		<input message="Please enter your username:" addproperty="remote.username" />
+
+		<input message="Please enter your password:" addproperty="remote.password">
+			<handler type="secure" />
+		</input>
+	</target>
+
+	<!-- Maven clean and install -->
+	<target name="maven-clean-install">
+		<echo message="[LOCAL] Generating war files" />
+		<echo message="[LOCAL] mvn clean" />
+		<maven basedir="${maven.project.path}" options="" goal="clean" resultproperty="maven.build.result" />
+
+		<echo message="[LOCAL] mvn install" />
+		<maven basedir="${maven.project.path}" options="" goal="install" resultproperty="maven.build.result" />
+	</target>
+
+	<!-- Deploy -->
+	<target name="deploy" depends="credentials, maven-clean-install">
+		<!-- Stop Tomcat -->
+		<echo message="[REMOTE] Stopping Tomcat" />
+		<sshexec usepty="true" host="${remote.host}" username="${remote.username}" password="${remote.password}" command="~/tomcat/bin/shutdown.sh" trust="true" />
+
+		<!-- Copy .war file to webapps -->
+		<echo message="[LOCAL->REMOTE] SCP .war from ${war.file.path} to ${remote.username}@${remote.host}:${remote.tomcat.webapps.dir}/" />
+		<scp file="${war.file.path}" sftp="true" trust="true" todir="${remote.username}@${remote.host}:${remote.tomcat.webapps.dir}/" password="${remote.password}" />
+
+		<!-- Start Tomcat -->
+		<echo message="[REMOTE] Starting Tomcat" />
+		<sshexec usepty="true" host="${remote.host}" username="${remote.username}" password="${remote.password}" command="~/tomcat/bin/startup.sh" trust="true" />
+	</target>
+
+	<target name="init" depends="deploy">
+	</target>
+
+</project>
