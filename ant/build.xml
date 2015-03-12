@@ -11,9 +11,6 @@
 	<property name="war.file.path" location="path/to/your/maven-project/target/${war.file.name}" />
 	<property name="remote.host" value="some-server.com" />
 	<property name="remote.tomcat.webapps.dir" value="tomcat/webapps" />
-	<tstamp>
-		<format property="TODAY" pattern="yyyy-MM-dd-hh-mm" locale="en" />
-	</tstamp>
 	<property name="maven.home" value="path/to/your/apache-maven-3.2.5" />
 
 	<!-- ################################################## SCP & SSHEXEC ########################################################## -->
