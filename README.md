@@ -11,3 +11,23 @@ This script first does a ``mvn clean`` and ``mvn install`` on the defined maven 
 
 
 This script can be extended to support backing up any existing .war files, log files etc.
+
+###Alternative execution of ``mvn clean install``
+```
+<target name="build-with-exec" description="Builds the individual project">
+  <exec dir="${maven.project.path}" executable="/bin/bash">
+    <arg value="mvn"/>
+    <arg line="clean install" />
+  </exec>
+</target>
+```
+or under Windows
+```
+<target name="build-with-exec" description="Builds the individual project">
+  <exec dir="${maven.project.path}" executable="cmd">
+    <arg value="/c"/>
+    <arg value="mvn"/>
+    <arg line="clean install" />
+  </exec>
+</target>
+```
