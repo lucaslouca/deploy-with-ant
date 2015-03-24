@@ -15,7 +15,8 @@ This script can be extended to support backing up any existing .war files, log f
 ###Alternative execution of ``mvn clean install``
 ```
 <target name="build-with-exec" description="Builds the individual project">
-  <exec dir="${maven.project.path}" executable="/bin/bash">
+  <exec dir="${maven.project.path}" executable="sh">
+    <arg value="-c"/>
     <arg value="mvn"/>
     <arg line="clean install" />
   </exec>
