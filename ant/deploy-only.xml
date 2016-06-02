@@ -1,6 +1,6 @@
 <project name="deploy" default="start" basedir=".">
 	<description>
-		Deploys .war files to server. Before it pushes the .war files to the server it changes some files in the .war files.
+		Deploys two (2) .war files to server (XYZApplication_server.war and XYZApplication.war). Before it pushes the .war files to the server it changes some files in the .war files.
 	</description>
 
 	<!-- ################################################## PROPERTIES ########################################################## -->
@@ -119,7 +119,7 @@
 		</propertyfile>
 	</target>
 
-	<!-- Set environment specific properties -->
+	<!-- Set environment specific properties in .war files -->
 	<target name="environment-properties" depends="set-props, reset-environment-properties">
 		<echo message="[LOCAL] Setting environment properties (deployment date and nav bar color) for ${remote.instance}" />
 
@@ -132,49 +132,61 @@
 		<replaceregexp file="../../com.lucaslouca.xyz.ui.rap/theme/application.css" match="background-color:(.)*;" replace="background-color:${environment.color};" byline="false" flags="gs" />
 
 		<!-- Set Texts.properties in XYZApplication_server.war -->
+		<!-- Unpack .war file -->
 		<echo message="[LOCAL] Unzipping ${war.server.filepath} to ${war.server.filepath}-temp/" />
 		<unzip src="${war.server.filepath}" dest="${war.server.filepath}-temp"/>
 
+		<!-- Find .jar to update -->
 		<first id="jarToUpdate">
 			<fileset dir="${war.server.filepath}-temp/WEB-INF/eclipse/plugins" includes="com.lucaslouca.xyz.shared*.jar" />
 		</first>
 
+		<!-- Update .jar -->
 		<echo message="[LOCAL] Updating .jar file ${toString:jarToUpdate}" />
 		<jar destfile="${toString:jarToUpdate}" update="true">
 			<zipfileset dir="../../com.lucaslouca.xyz.shared/resources/texts/" prefix="resources/texts/" />
 		</jar>
 
+		<!-- Create .war file again -->
 		<echo message="[LOCAL] Zipping ${war.server.filepath}-temp" />
 		<zip destfile="${war.server.filepath}" basedir="${war.server.filepath}-temp"/>
 
+		<!-- Delete temp -->
 		<echo message="Deleting ${war.server.filepath}-temp" />
 		<delete dir="${war.server.filepath}-temp"/>
 
 		<!-- Set Texts.properties and application.css in XYZApplication.war -->
+		<!-- Unpack .war file -->
 		<echo message="[LOCAL] Unzipping ${war.rap-server.filepath} to ${war.rap-server.filepath}-temp/" />
 		<unzip src="${war.rap-server.filepath}" dest="${war.rap-server.filepath}-temp"/>
 
+		<!-- Find second .jar to update -->
 		<first id="jarToUpdate">
 			<fileset dir="${war.rap-server.filepath}-temp/WEB-INF/eclipse/plugins" includes="com.lucaslouca.xyz.shared*.jar" />
 		</first>
 
+		<!-- Update .jar -->
 		<echo message="[LOCAL] Updating .jar file ${toString:jarToUpdate}" />
 		<jar destfile="${toString:jarToUpdate}" update="true">
 			<zipfileset dir="../../com.lucaslouca.xyz.shared/resources/texts/" prefix="resources/texts/" />
 		</jar>
 
+		<!-- Find third .jar to update -->
 		<first id="jarToUpdate">
 			<fileset dir="${war.rap-server.filepath}-temp/WEB-INF/eclipse/plugins" includes="com.lucaslouca.xyz.ui.rap*.jar" />
 		</first>
 
+		<!-- Update .jar -->
 		<echo message="[LOCAL] Updating .jar file ${toString:jarToUpdate}" />
 		<jar destfile="${toString:jarToUpdate}" update="true">
 			<zipfileset dir="../../com.lucaslouca.xyz.ui.rap/theme/" prefix="theme" />
 		</jar>
 
+		<!-- Create .war again -->
 		<echo message="[LOCAL] Zipping ${war.rap-server.filepath}-temp" />
 		<zip destfile="${war.rap-server.filepath}" basedir="${war.rap-server.filepath}-temp"/>
 
+		<!-- Delete temp -->
 		<echo message="Deleting ${war.rap-server.filepath}-temp" />
 		<delete dir="${war.rap-server.filepath}-temp"/>
 	</target>
@@ -237,13 +249,11 @@
 		<echo message="6 [REMOTE] Delete old webapps from ${remote.tomcat.extracted.webapps.dir}/" />
 		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo rm -r ${remote.tomcat.extracted.webapps.dir}/XYZApplication; sudo rm -rf ${remote.tomcat.extracted.webapps.dir}/XYZApplication_server;" trust="true" />
 
-
 		<echo message="7 [REMOTE] Delete old Tomcat log4j properties ${remote.tomcat.log4j.conf.dir}/log4j.properties" />
 		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo rm -f ${remote.tomcat.log4j.conf.dir}/log4j.properties;" trust="true" />
 
 		<echo message="8 [REMOTE] Moving new Tomcat ${remote.root.tempdir}/log4j.properties to ${remote.tomcat.log4j.conf.dir}/" />
 		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo mv ${remote.root.tempdir}/log4j.properties ${remote.tomcat.log4j.conf.dir}/;" trust="true" />
-
 
 		<echo message="9 [REMOTE] Starting Tomcat" />
 		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo /etc/init.d/ugiqjot70 start" trust="true" />
