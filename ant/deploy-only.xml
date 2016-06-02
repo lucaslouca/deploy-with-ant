@@ -1,6 +1,6 @@
 <project name="deploy" default="start" basedir=".">
 	<description>
-		Builds and deploys .war files to server
+		Deploys .war files to server. Before it pushes the .war files to the server it changes some files in the .war files.
 	</description>
 
 	<!-- ################################################## PROPERTIES ########################################################## -->
