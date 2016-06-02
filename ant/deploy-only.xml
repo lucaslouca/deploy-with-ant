@@ -1,0 +1,256 @@
+<project name="deploy" default="start" basedir=".">
+	<description>
+		Builds and deploys .war files to server
+	</description>
+
+	<!-- ################################################## PROPERTIES ########################################################## -->
+	<!-- ########### Universal ########### -->
+	<!-- ########### Remote ########### -->
+	<property name="server.war.filename" value="XYZApplication_server.war" />
+	<property name="rap-server.war.filename" value="XYZApplication.war" />
+
+	<!-- ########### Local ########### -->
+	<property name="war.server.filepath" value="C:\temp\XYZApplication_server.war" />
+	<property name="war.rap-server.filepath" value="C:\temp\XYZApplication.war" />
+
+	<property name="remote.user.tempdir" value="XYZApplication_temp" />
+	<property name="remote.root.tempdir" value="/tmp/XYZApplication" />
+	<property name="remote.root.backupdir" value="/XYZApplicationBackup" />
+	<property name="remote.tomcat.logs" value="/var/log/tom70/XYZ" />
+	<property name="remote.tomcat.webapps.dir" value="/opt/Applications/XYZ/tom70/webapps" />
+	<property name="remote.tomcat.log4j.conf.dir" value="/opt/Applications/XYZ/tom70/config" />
+
+	<tstamp>
+		<format property="TODAY" pattern="yyyyMMdd-hhmm" locale="en" />
+	</tstamp>
+
+	<!-- ################################################## ANT CONTRIB ########################################################## -->
+	<taskdef resource="net/sf/antcontrib/antcontrib.properties">
+		<classpath>
+			<pathelement location="../lib/ant-contrib-0.3.jar" />
+		</classpath>
+	</taskdef>
+
+	<!-- ################################################## ANT FORM ########################################################## -->
+	<taskdef name="antform" classname="com.sardak.antform.AntForm" classpath="../lib/antform.jar" />
+	<taskdef name="antmenu" classname="com.sardak.antform.AntMenu" classpath="../lib/antform.jar" />
+
+	<!-- ################################################## SCP & SSHEXEC ########################################################## -->
+	<!-- Load the jsch lib -->
+	<available property="ant-jsch.present" file="${ant.home}/lib/ant-jsch.jar" />
+	<fail if="ant-jsch.present" message="Please remove ant-jsch.jar from ${ant.home}/lib see [http://ant.apache.org/faq.html#delegating-classloader]" />
+
+	<path id="jsch.class.path">
+		<pathelement location="../lib/ant-jsch.jar" />
+		<pathelement location="../lib/jsch.jar" />
+	</path>
+
+	<taskdef name="scp" classname="org.apache.tools.ant.taskdefs.optional.ssh.Scp" classpathref="jsch.class.path" />
+	<taskdef name="sshexec" classname="org.apache.tools.ant.taskdefs.optional.ssh.SSHExec" classpathref="jsch.class.path" />
+
+
+	<!-- ################################################## TARGETS ########################################################## -->
+	<!-- ASK for user credentials -->
+	<target name="credentials">
+		<!-- <input message="Please enter your username:" addproperty="remote.user"> 
+			<handler type="greedy" /> </input> <input message="Please enter your your 
+			password:" addproperty="remote.pass"> <handler type="secure" /> </input> -->
+
+
+		<antform title="Build and Deploy">
+			<fileSelectionProperty label="XYZApplication_server.war: " property="war.server.filepath"  Required="true" />
+			<fileSelectionProperty label="XYZApplication.war: " property="war.rap-server.filepath" Required="true" />
+
+			<selectionProperty label="Environment: " property="remote.instance" values="integration;quality;production" separator=";" />
+			<textProperty label="Username: " required="true" focus="true" property="remote.user" />
+			<textProperty label="Password: " required="true" password="true" property="remote.pass" />
+
+			<controlbar>
+				<button label="Abort" type="cancel" />
+				<button label="Deploy" type="ok" target="deploy" />
+			</controlbar>
+		</antform>
+
+	</target>
+
+	<!-- Set Remote hosts based on input -->
+	<target name="set-props">
+		<echo message="[LOCAL] Setting properties" />
+		<if>
+			<equals arg1="${remote.instance}" arg2="quality" />
+			<then>
+				<echo message="Got quality" />
+				<property name="remote.host" value="xyz-quality.internal.lucaslouca.com" />
+				<property name="environment.color" value="#fff20d" />
+				<property name="remote.tomcat.extracted.webapps.dir" value="/var/log/tom70/UGI/QJO/work/Catalina/ugiqjoq3t70" />
+			</then>
+
+			<elseif>
+				<equals arg1="${remote.instance}" arg2="integration" />
+				<then>
+					<echo message="Got IT" />
+					<property name="remote.host" value="xyz-integration.internal.lucaslouca.com" />
+					<property name="environment.color" value="blue" />
+					<property name="remote.tomcat.extracted.webapps.dir" value="/var/log/tom70/UGI/QJO/work/Catalina/ugiqjoq3t70" />
+				</then>
+			</elseif>
+
+			<elseif>
+				<equals arg1="${remote.instance}" arg2="production" />
+				<then>
+					<echo message="Got PROD" />
+					<property name="remote.host" value="xyz-production.internal.lucaslouca.com" />
+					<property name="environment.color" value="red" />
+					<property name="remote.tomcat.extracted.webapps.dir" value="/var/log/tom70/UGI/QJO/work/Catalina/ugiqjop3t70" />
+				</then>
+			</elseif>
+
+			<else>
+				<fail message="Got invalid instance option '${remote.instance}'. Aborting." />
+			</else>
+		</if>
+	</target>
+
+	<!-- Reset environment specific properties -->
+	<target name="reset-environment-properties">
+		<echo message="[LOCAL] Clearing environment properties" />
+		<propertyfile file="../../com.lucaslouca.xyz.shared/resources/texts/Texts.properties">
+			<entry key="deploymentdate" value="" />
+		</propertyfile>
+	</target>
+
+	<!-- Set environment specific properties -->
+	<target name="environment-properties" depends="set-props, reset-environment-properties">
+		<echo message="[LOCAL] Setting environment properties (deployment date and nav bar color) for ${remote.instance}" />
+
+		<echo message="[LOCAL] Setting deployment date: ${TODAY}" />
+		<propertyfile file="../../com.lucaslouca.xyz.shared/resources/texts/Texts.properties">
+			<entry key="deploymentdate" value="Deployment: ${TODAY}" />
+		</propertyfile>
+
+		<echo message="[LOCAL] Using nav bar color: ${environment.color}" />
+		<replaceregexp file="../../com.lucaslouca.xyz.ui.rap/theme/application.css" match="background-color:(.)*;" replace="background-color:${environment.color};" byline="false" flags="gs" />
+
+		<!-- Set Texts.properties in XYZApplication_server.war -->
+		<echo message="[LOCAL] Unzipping ${war.server.filepath} to ${war.server.filepath}-temp/" />
+		<unzip src="${war.server.filepath}" dest="${war.server.filepath}-temp"/>
+
+		<first id="jarToUpdate">
+			<fileset dir="${war.server.filepath}-temp/WEB-INF/eclipse/plugins" includes="com.lucaslouca.xyz.shared*.jar" />
+		</first>
+
+		<echo message="[LOCAL] Updating .jar file ${toString:jarToUpdate}" />
+		<jar destfile="${toString:jarToUpdate}" update="true">
+			<zipfileset dir="../../com.lucaslouca.xyz.shared/resources/texts/" prefix="resources/texts/" />
+		</jar>
+
+		<echo message="[LOCAL] Zipping ${war.server.filepath}-temp" />
+		<zip destfile="${war.server.filepath}" basedir="${war.server.filepath}-temp"/>
+
+		<echo message="Deleting ${war.server.filepath}-temp" />
+		<delete dir="${war.server.filepath}-temp"/>
+
+		<!-- Set Texts.properties and application.css in XYZApplication.war -->
+		<echo message="[LOCAL] Unzipping ${war.rap-server.filepath} to ${war.rap-server.filepath}-temp/" />
+		<unzip src="${war.rap-server.filepath}" dest="${war.rap-server.filepath}-temp"/>
+
+		<first id="jarToUpdate">
+			<fileset dir="${war.rap-server.filepath}-temp/WEB-INF/eclipse/plugins" includes="com.lucaslouca.xyz.shared*.jar" />
+		</first>
+
+		<echo message="[LOCAL] Updating .jar file ${toString:jarToUpdate}" />
+		<jar destfile="${toString:jarToUpdate}" update="true">
+			<zipfileset dir="../../com.lucaslouca.xyz.shared/resources/texts/" prefix="resources/texts/" />
+		</jar>
+
+		<first id="jarToUpdate">
+			<fileset dir="${war.rap-server.filepath}-temp/WEB-INF/eclipse/plugins" includes="com.lucaslouca.xyz.ui.rap*.jar" />
+		</first>
+
+		<echo message="[LOCAL] Updating .jar file ${toString:jarToUpdate}" />
+		<jar destfile="${toString:jarToUpdate}" update="true">
+			<zipfileset dir="../../com.lucaslouca.xyz.ui.rap/theme/" prefix="theme" />
+		</jar>
+
+		<echo message="[LOCAL] Zipping ${war.rap-server.filepath}-temp" />
+		<zip destfile="${war.rap-server.filepath}" basedir="${war.rap-server.filepath}-temp"/>
+
+		<echo message="Deleting ${war.rap-server.filepath}-temp" />
+		<delete dir="${war.rap-server.filepath}-temp"/>
+	</target>
+
+
+	<!-- Clean user remote temp directory (delete old and create new one) -->
+	<target name="clean-user-remote" depends="set-props">
+		<echo message="[REMOTE] Delete old /home/${remote.user}/${remote.user.tempdir} and create new one." />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="rm -rf ${remote.user.tempdir}; mkdir ${remote.user.tempdir}" trust="true" />
+	</target>
+
+	<!-- Clean root remote temp directory (delete old and create new one) -->
+	<target name="clean-root-remote" depends="set-props">
+		<echo message="[REMOTE] Delete old ${remote.root.tempdir} and create new one." />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo rm -rf ${remote.root.tempdir}; mkdir ${remote.root.tempdir};" trust="true" />
+	</target>
+
+	<!-- SCP copy .war files to user remote temp dir -->
+	<target name="scp-copy-to-remote-user-temp" depends="clean-user-remote, set-props">
+		<echo message="[LOCAL] Copying wars to to ${remote.user}@${remote.host}:${remote.user.tempdir}/" />
+
+		<scp file="${war.server.filepath}" sftp="false" trust="true" todir="${remote.user}@${remote.host}:${remote.user.tempdir}/" password="${remote.pass}" />
+
+		<scp file="${war.rap-server.filepath}" sftp="false" trust="true" todir="${remote.user}@${remote.host}:${remote.user.tempdir}/" password="${remote.pass}" />
+
+
+		<echo message="[LOCAL] Copying ../../com.lucaslouca.xyz.server/products/${remote.instance}/log4j.properties to ${remote.user}@${remote.host}:${remote.user.tempdir}/" />
+		<scp file="../../com.lucaslouca.xyz.server/products/${remote.instance}/log4j.properties" sftp="false" trust="true" todir="${remote.user}@${remote.host}:${remote.user.tempdir}/" password="${remote.pass}" />
+
+	</target>
+
+	<!-- Move .war and .properties files from user remote temp to root remote temp dir -->
+	<target name="move-wars-to-remote-root-temp" depends="scp-copy-to-remote-user-temp, clean-root-remote, set-props">
+		<echo message="[REMOTE] Moving wars from /home/${remote.user}/${remote.user.tempdir}/ to ${remote.root.tempdir}/" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="mv /home/${remote.user}/${remote.user.tempdir}/${server.war.filename} ${remote.root.tempdir}/${server.war.filename}; mv /home/${remote.user}/${remote.user.tempdir}/${rap-server.war.filename} ${remote.root.tempdir}/${rap-server.war.filename};" trust="true" />
+
+
+		<echo message="[REMOTE] Moving log4j.properties from /home/${remote.user}/${remote.user.tempdir}/ to ${remote.root.tempdir}/" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="mv /home/${remote.user}/${remote.user.tempdir}/log4j.properties ${remote.root.tempdir}/;" trust="true" />
+
+	</target>
+
+	<!-- Deploy -->
+	<target name="deploy" depends="environment-properties, move-wars-to-remote-root-temp, set-props">
+		<echo message="1 [REMOTE] Stopping Tomcat" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo /etc/init.d/ugiqjot70 stop" trust="true" />
+
+		<echo message="2 [REMOTE] Creating Backup dir ${remote.root.backupdir}/${TODAY}/" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo mkdir -p ${remote.root.backupdir}/${TODAY}/" trust="true" />
+
+		<echo message="3 [REMOTE] Backing up old war files" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo mv ${remote.tomcat.webapps.dir}/XYZApplication.war ${remote.root.backupdir}/${TODAY}/; sudo mv ${remote.tomcat.webapps.dir}/XYZApplication_server.war ${remote.root.backupdir}/${TODAY}/" trust="true" />
+
+		<echo message="4 [REMOTE] Backing up logs" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo mv -f ${remote.tomcat.logs}/XYZApplicationServer.log ${remote.root.backupdir}/${TODAY}/;" trust="true" />
+
+		<echo message="5 [REMOTE] Moving wars from ${remote.root.tempdir}/ to ${remote.tomcat.webapps.dir}/" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo mv ${remote.root.tempdir}/${server.war.filename} ${remote.tomcat.webapps.dir}/${server.war.filename}; sudo mv ${remote.root.tempdir}/${rap-server.war.filename} ${remote.tomcat.webapps.dir}/${rap-server.war.filename};" trust="true" />
+
+		<echo message="6 [REMOTE] Delete old webapps from ${remote.tomcat.extracted.webapps.dir}/" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo rm -r ${remote.tomcat.extracted.webapps.dir}/XYZApplication; sudo rm -rf ${remote.tomcat.extracted.webapps.dir}/XYZApplication_server;" trust="true" />
+
+
+		<echo message="7 [REMOTE] Delete old Tomcat log4j properties ${remote.tomcat.log4j.conf.dir}/log4j.properties" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo rm -f ${remote.tomcat.log4j.conf.dir}/log4j.properties;" trust="true" />
+
+		<echo message="8 [REMOTE] Moving new Tomcat ${remote.root.tempdir}/log4j.properties to ${remote.tomcat.log4j.conf.dir}/" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo mv ${remote.root.tempdir}/log4j.properties ${remote.tomcat.log4j.conf.dir}/;" trust="true" />
+
+
+		<echo message="9 [REMOTE] Starting Tomcat" />
+		<sshexec host="${remote.host}" username="${remote.user}" password="${remote.pass}" command="sudo /etc/init.d/ugiqjot70 start" trust="true" />
+	</target>
+
+
+	<target name="start" depends="credentials">
+	</target>
+
+</project>
