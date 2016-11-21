@@ -5,6 +5,7 @@ This script first does a ``mvn clean`` and ``mvn install`` on the defined maven 
 
 
  **How to use**
+ 
 * Adjust the property values in ``ant/build.xml`` to your needs
 * ``cd ant``
 * Run ``ant``
